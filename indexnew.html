@@ -1,56 +1,276 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <title>Camera Stream</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.2/css/bulma.min.css">
+    <link rel="shortcut icon" href="favicon.ico" />
+    <link rel="stylesheet" type="text/css"
+        href="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.1/control_utils.css" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.1/camera_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.1/control_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.1/drawing_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.1/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mjyc/opencv.js@1.0.0/opencv.min.js" ></script>
 </head>
+
 <body>
-    <h1>Camera Stream</h1>
-    <div style="display: flex; width: 100%; justify-content: space-between;">
-        <video id="clientVideo" autoplay style="width: 49%;"></video>
-        <img id="imgserver" style="width: 49%;"></img>
-    </div>
+    <!-- CONTENTS -->
+    <div class="container" style="margin-top: 20px;">
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script>
-        const clientVideoElement = document.getElementById('clientVideo');
-        const imgServerElement = document.getElementById('imgserver');
-        const constraints = { video: true };        
-        const socket = io.connect('https://facedetect-api.vndigitech.com');    
-        navigator.mediaDevices.getUserMedia(constraints)
-            .then(function(stream) {
-                clientVideoElement.srcObject = stream;
+        <div class="columns">
 
-                setInterval(() => { 
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
+            <!-- WEBCAM INPUT -->
+            <div class="column">
+                <article class="panel is-info">
+                    <p class="panel-heading">
+                        Webcam Input
+                    </p>
+                    <div class="panel-block">
+                        <video class="input_video2"></video>
+                    </div>
+                </article>
+            </div>
 
-                    const width = 640;
-                    const height = 480;
-                    canvas.width = width;
-                    canvas.height = height;
-                    context.drawImage(clientVideoElement, 0, 0, width, height);
-                    const imageData = context.getImageData(0, 0, width, height);
-                    let image_data_url = canvas.toDataURL('image/jpeg');
-                    socket.emit('frame', image_data_url); // Gửi dữ liệu ảnh qua WebSockets
-                }, 1000 / 20);  // 30 frames per second
-            })
-            .catch(function(error) {
-                console.error('Error accessing camera:', error);
-            });
+            <!-- MEDIAPIPE OUTPUT -->
+            <div class="column">
+                <article class="panel is-info">
+                    <p class="panel-heading">
+                        Mediapipe Face Mesh
+                    </p>
+                    <div class="panel-block">
+                        <canvas class="output2" width="640px" height="480px"></canvas>
+                    </div>
+                </article>
+            </div>
+        </div>
 
-        socket.on('connect', () => {
-            console.log('Connected to server');
-        });
+        <div class="loading">
+            <div class="spinner"></div>
+        </div>
+        <div style="visibility: hidden;" class="control2">
+        </div>
 
-        socket.on('frame_update', (frameData) => {
-            try {
-                console.log('Received frame update from server');
-                const image_data_url = 'data:image/jpeg;base64,' + frameData;
-                imgServerElement.src = image_data_url
-            } catch (e) {
-                console.log('err: ', e);
+        <script>
+            const video2 = document.getElementsByClassName('input_video2')[0];
+            const out2 = document.getElementsByClassName('output2')[0];
+            const controlsElement2 = document.getElementsByClassName('control2')[0];
+            const canvasCtx = out2.getContext('2d');
+
+            const fpsControl = new FPS();
+            const spinner = document.querySelector('.loading');
+            spinner.ontransitionend = () => {
+                spinner.style.display = 'none';
+            };
+
+            function onResultsFaceMesh(results) {
+                document.body.classList.add('loaded');
+                fpsControl.tick();
+
+                canvasCtx.save();
+                canvasCtx.clearRect(0, 0, out2.width, out2.height);
+                canvasCtx.drawImage(
+                    results.image, 0, 0, out2.width, out2.height);
+                // img_h, img_w, img_c = image.shape
+                const img_w = out2.width;
+                const img_h = out2.height;
+                const numRows = 4;
+                const modelPoints = cv.Mat.zeros(numRows, 3, cv.CV_64FC1);
+                // Camera internals
+                const size = { width: 640, height: 480 };
+                const focalLength = size.width;
+                const center = [size.width / 2, size.height / 2];
+                const cameraMatrix = cv.matFromArray(3, 3, cv.CV_64FC1, [
+                    focalLength,
+                    0,
+                    center[0],
+                    0,
+                    focalLength,
+                    center[1],
+                    0,
+                    0,
+                    1
+                ]);
+                // Create Matrixes
+                const imagePoints = cv.Mat.zeros(numRows, 2, cv.CV_64FC1);
+                const distCoeffs = cv.Mat.zeros(4, 1, cv.CV_64FC1); // Assuming no lens distortion
+                const rvec = new cv.Mat({ width: 1, height: 3 }, cv.CV_64FC1);
+                const tvec = new cv.Mat({ width: 1, height: 3 }, cv.CV_64FC1);
+                const pointZ = cv.matFromArray(1, 3, cv.CV_64FC1, [0.0, 0.0, 500.0]);
+                const pointY = cv.matFromArray(1, 3, cv.CV_64FC1, [0.0, 500.0, 0.0]);
+                const pointX = cv.matFromArray(1, 3, cv.CV_64FC1, [500.0, 0.0, 0.0]);
+                const noseEndPoint2DZ = new cv.Mat();
+                const nose_end_point2DY = new cv.Mat();
+                const nose_end_point2DX = new cv.Mat();
+                const jaco = new cv.Mat();
+                window.beforeunload = () => {
+                    im.delete();
+                    imagePoints.delete();
+                    distCoeffs.delete();
+                    rvec.delete();
+                    tvec.delete();
+                    pointZ.delete();
+                    pointY.delete();
+                    pointX.delete();
+                    noseEndPoint2DZ.delete();
+                    nose_end_point2DY.delete();
+                    nose_end_point2DX.delete();
+                    jaco.delete();
+                };
+                if (results.multiFaceLandmarks) {
+                    for (const landmarks of results.multiFaceLandmarks) {
+                        drawConnectors(
+                            canvasCtx, landmarks, FACEMESH_TESSELATION,
+                            { color: '#C0C0C070', lineWidth: 1 });
+                        let index = 0;
+                        for (let i = 0; i < landmarks.length; i++) {
+                            const lm = landmarks[i];
+                            if (i == 33 || i == 263 || i == 4 || i == 61 || i == 291 || i == 199) {
+                                canvasCtx.fillStyle = '#FF0000';
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(lm.x * img_w, lm.y * img_h, 2, 0, 2 * Math.PI);
+                                canvasCtx.fill();
+
+                                // Gắn chỉ số lên điểm đỏ
+                                canvasCtx.fillStyle = '#00FF00';
+                                canvasCtx.font = '12px Arial';
+                                canvasCtx.fillText(i.toString(), lm.x * img_w, lm.y * img_h);
+                                let nose_2d, nose_3d;
+                                if (i == 4) {
+                                    nose_2d = [lm.x * img_w, lm.y * img_h]
+                                    nose_3d = [lm.x * img_w, lm.y * img_h, lm.z * 3000]
+                                    imagePoints.data64F[0] = lm.x * img_w;
+                                    imagePoints.data64F[1] = lm.y * img_h;
+
+                                    modelPoints.data64F[0] = lm.x * img_w;
+                                    modelPoints.data64F[1] = lm.y * img_h;
+                                    modelPoints.data64F[2] = lm.z;
+                                }
+                                if (i == 263) {
+                                    imagePoints.data64F[2] = lm.x * img_w;
+                                    imagePoints.data64F[3] = lm.y * img_h;
+
+                                    modelPoints.data64F[3] = lm.x * img_w;
+                                    modelPoints.data64F[4] = lm.y * img_h;
+                                    modelPoints.data64F[5] = lm.z;
+                                }
+
+                                if (i == 61) {
+                                    imagePoints.data64F[4] = lm.x * img_w;
+                                    imagePoints.data64F[5] = lm.y * img_h;
+
+                                    modelPoints.data64F[6] = lm.x * img_w;
+                                    modelPoints.data64F[7] = lm.y * img_h;
+                                    modelPoints.data64F[8] = lm.z;
+                                    
+                                }
+
+                                if (i == 291) {
+                                    imagePoints.data64F[6] = lm.x * img_w;
+                                    imagePoints.data64F[7] = lm.y * img_h;
+
+                                    modelPoints.data64F[9] = lm.x * img_w;
+                                    modelPoints.data64F[10] = lm.y * img_h;
+                                    modelPoints.data64F[11] = lm.z;
+                                }
+
+                                if (i == 199) {
+                                    imagePoints.data64F[8] = lm.x * img_w;
+                                    imagePoints.data64F[9] = lm.y * img_h;
+
+                                    modelPoints.data64F[12] = lm.x * img_w;
+                                    modelPoints.data64F[13] = lm.y * img_h;
+                                    modelPoints.data64F[14] = lm.z;
+                                }
+
+                                if (i == 33) {
+                                    imagePoints.data64F[10] = lm.x * img_w;
+                                    imagePoints.data64F[11] = lm.y * img_h;
+
+                                    modelPoints.data64F[15] = lm.x * img_w;
+                                    modelPoints.data64F[16] = lm.y * img_h;
+                                    modelPoints.data64F[17] = lm.z;
+                                }
+                            }
+                        }
+                        const success = cv.solvePnP(
+                            modelPoints,
+                            imagePoints,
+                            cameraMatrix,
+                            distCoeffs,
+                            rvec,
+                            tvec,
+                            true
+                        );
+
+                        if (!success){
+                            return;
+                        }
+
+                        const x = rvec.data64F[0] * 360; // Góc x
+                        console.log("🚀 ~ file: testnew.html:214 ~ onResultsFaceMesh ~ x:", x)
+                        const y = rvec.data64F[1] * 360; // Góc y
+                        console.log("🚀 ~ file: testnew.html:216 ~ onResultsFaceMesh ~ y:", y)
+                        const z = rvec.data64F[2] * 360; // Góc z
+                        console.log("🚀 ~ file: testnew.html:218 ~ onResultsFaceMesh ~ z:", z)
+                    }
+                }
+                canvasCtx.restore();
             }
-        });
-    </script>
+
+            const faceMesh = new FaceMesh({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.1/${file}`;
+                }
+            });
+            faceMesh.onResults(onResultsFaceMesh);
+
+            const camera = new Camera(video2, {
+                onFrame: async () => {
+                    await faceMesh.send({ image: video2 });
+                },
+                width: 640,
+                height: 480
+            });
+            camera.start();
+
+            new ControlPanel(controlsElement2, {
+                selfieMode: true,
+                maxNumFaces: 1,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            })
+                .add([
+                    new StaticText({ title: 'MediaPipe Face Mesh' }),
+                    fpsControl,
+                    new Toggle({ title: 'Selfie Mode', field: 'selfieMode' }),
+                    new Slider({
+                        title: 'Max Number of Faces',
+                        field: 'maxNumFaces',
+                        range: [1, 4],
+                        step: 1
+                    }),
+                    new Slider({
+                        title: 'Min Detection Confidence',
+                        field: 'minDetectionConfidence',
+                        range: [0, 1],
+                        step: 0.01
+                    }),
+                    new Slider({
+                        title: 'Min Tracking Confidence',
+                        field: 'minTrackingConfidence',
+                        range: [0, 1],
+                        step: 0.01
+                    }),
+                ])
+                .on(options => {
+                    video2.classList.toggle('selfie', options.selfieMode);
+                    faceMesh.setOptions(options);
+                });
+        </script>
 </body>
+
 </html>
