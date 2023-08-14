@@ -77,7 +77,7 @@
                 // img_h, img_w, img_c = image.shape
                 const img_w = out2.width;
                 const img_h = out2.height;
-                const numRows = 4;
+                const numRows = 6;
                 const modelPoints = cv.Mat.zeros(numRows, 3, cv.CV_64FC1);
                 // Camera internals
                 const size = { width: 640, height: 480 };
@@ -97,35 +97,39 @@
                 // Create Matrixes
                 const imagePoints = cv.Mat.zeros(numRows, 2, cv.CV_64FC1);
                 const distCoeffs = cv.Mat.zeros(4, 1, cv.CV_64FC1); // Assuming no lens distortion
-                const rvec = new cv.Mat({ width: 1, height: 3 }, cv.CV_64FC1);
+                // const rvec = new cv.Mat({ width: 1, height: 3 }, cv.CV_64FC1);
                 const tvec = new cv.Mat({ width: 1, height: 3 }, cv.CV_64FC1);
-                const pointZ = cv.matFromArray(1, 3, cv.CV_64FC1, [0.0, 0.0, 500.0]);
-                const pointY = cv.matFromArray(1, 3, cv.CV_64FC1, [0.0, 500.0, 0.0]);
-                const pointX = cv.matFromArray(1, 3, cv.CV_64FC1, [500.0, 0.0, 0.0]);
-                const noseEndPoint2DZ = new cv.Mat();
-                const nose_end_point2DY = new cv.Mat();
-                const nose_end_point2DX = new cv.Mat();
-                const jaco = new cv.Mat();
+                const rvec = cv.Mat.zeros(1, 3, cv.CV_64FC1);
+                // const tvec = cv.Mat.zeros(1, 3, cv.CV_64FC1);
+                // const pointZ = cv.matFromArray(1, 3, cv.CV_64FC1, [0.0, 0.0, 500.0]);
+                // const pointY = cv.matFromArray(1, 3, cv.CV_64FC1, [0.0, 500.0, 0.0]);
+                // const pointX = cv.matFromArray(1, 3, cv.CV_64FC1, [500.0, 0.0, 0.0]);
+                // const noseEndPoint2DZ = new cv.Mat();
+                // const nose_end_point2DY = new cv.Mat();
+                // const nose_end_point2DX = new cv.Mat();
+                // const jaco = new cv.Mat();
                 window.beforeunload = () => {
-                    im.delete();
+                    // im.delete();
                     imagePoints.delete();
                     distCoeffs.delete();
                     rvec.delete();
                     tvec.delete();
-                    pointZ.delete();
-                    pointY.delete();
-                    pointX.delete();
-                    noseEndPoint2DZ.delete();
-                    nose_end_point2DY.delete();
-                    nose_end_point2DX.delete();
-                    jaco.delete();
+                    // pointZ.delete();
+                    // pointY.delete();
+                    // pointX.delete();
+                    // noseEndPoint2DZ.delete();
+                    // nose_end_point2DY.delete();
+                    // nose_end_point2DX.delete();
+                    // jaco.delete();
                 };
                 if (results.multiFaceLandmarks) {
+                    let angle = '';
                     for (const landmarks of results.multiFaceLandmarks) {
                         drawConnectors(
                             canvasCtx, landmarks, FACEMESH_TESSELATION,
                             { color: '#C0C0C070', lineWidth: 1 });
                         let index = 0;
+                        let nose_2d, nose_3d;
                         for (let i = 0; i < landmarks.length; i++) {
                             const lm = landmarks[i];
                             if (i == 33 || i == 263 || i == 4 || i == 61 || i == 291 || i == 199) {
@@ -138,7 +142,6 @@
                                 canvasCtx.fillStyle = '#00FF00';
                                 canvasCtx.font = '12px Arial';
                                 canvasCtx.fillText(i.toString(), lm.x * img_w, lm.y * img_h);
-                                let nose_2d, nose_3d;
                                 if (i == 4) {
                                     nose_2d = [lm.x * img_w, lm.y * img_h]
                                     nose_3d = [lm.x * img_w, lm.y * img_h, lm.z * 3000]
@@ -196,6 +199,9 @@
                                 }
                             }
                         }
+                        tvec.data64F[0] = -100;
+                        tvec.data64F[1] = 100;
+                        tvec.data64F[2] = 1000;
                         const success = cv.solvePnP(
                             modelPoints,
                             imagePoints,
@@ -210,13 +216,39 @@
                             return;
                         }
 
-                        const x = rvec.data64F[0] * 360; // Góc x
-                        console.log("🚀 ~ file: testnew.html:214 ~ onResultsFaceMesh ~ x:", x)
-                        const y = rvec.data64F[1] * 360; // Góc y
-                        console.log("🚀 ~ file: testnew.html:216 ~ onResultsFaceMesh ~ y:", y)
-                        const z = rvec.data64F[2] * 360; // Góc z
-                        console.log("🚀 ~ file: testnew.html:218 ~ onResultsFaceMesh ~ z:", z)
+                        const x = rvec.data64F[0] * 360;
+                        const y = rvec.data64F[1] * 360;
+                        console.log("🚀 ~ file: indexnew.html:221 ~ onResultsFaceMesh ~ y:", y)
+                        const z = rvec.data64F[2] * 360;
+
+                        if (y < -0.2) {
+                            angle = 'left';
+                            if (x < -0.2) {
+                                angle += ' down';
+                            } else if (x > 0.2) {
+                                angle += ' up';
+                            }
+                        } else if (y > 0.2) {
+                            angle = 'right';
+                            if (x < -0.2) {
+                                angle += ' down';
+                            } else if (x > 0.2) {
+                                angle += ' up';
+                            }
+                        } else if (x > 0.2) {
+                            angle = 'up';
+                        } else if (x < - 0.2) {
+                            angle = 'down';
+                        }
+                        else {
+                            angle = 'forward';
+                        }
                     }
+
+                    // Draw text in the top-left corner
+                    canvasCtx.fillStyle = 'rgb(255, 0, 0)';
+                    canvasCtx.font = '18px Arial';
+                    canvasCtx.fillText(angle, 10, 25);
                 }
                 canvasCtx.restore();
             }
