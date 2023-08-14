@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Stream</title>
+</head>
+<body>
+    <h1>Camera Stream</h1>
+    <div style="display: flex; width: 100%; justify-content: space-between;">
+        <video id="clientVideo" autoplay style="width: 49%;"></video>
+        <img id="imgserver" style="width: 49%;"></img>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        const clientVideoElement = document.getElementById('clientVideo');
+        const imgServerElement = document.getElementById('imgserver');
+        const constraints = { video: true };        
+        const socket = io.connect('https://facedetect-api.vndigitech.com');    
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(function(stream) {
+                clientVideoElement.srcObject = stream;
+
+                setInterval(() => { 
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+
+                    const width = 640;
+                    const height = 480;
+                    canvas.width = width;
+                    canvas.height = height;
+                    context.drawImage(clientVideoElement, 0, 0, width, height);
+                    const imageData = context.getImageData(0, 0, width, height);
+                    let image_data_url = canvas.toDataURL('image/jpeg');
+                    socket.emit('frame', image_data_url); // Gửi dữ liệu ảnh qua WebSockets
+                }, 1000 / 20);  // 30 frames per second
+            })
+            .catch(function(error) {
+                console.error('Error accessing camera:', error);
+            });
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('frame_update', (frameData) => {
+            try {
+                console.log('Received frame update from server');
+                const image_data_url = 'data:image/jpeg;base64,' + frameData;
+                imgServerElement.src = image_data_url
+            } catch (e) {
+                console.log('err: ', e);
+            }
+        });
+    </script>
+</body>
+</html>
