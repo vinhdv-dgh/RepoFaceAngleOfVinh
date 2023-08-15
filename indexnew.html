@@ -62,10 +62,20 @@
 
             const fpsControl = new FPS();
             const spinner = document.querySelector('.loading');
+            const ConstantAngle = {
+                    LEFT: 'LEFT', // Nhìn bên trái
+                    STRAIGHT: 'STRAIGHT', // Nhìn thẳng
+                    RIGHT: 'RIGHT', // Nhìn bên Phải
+                    LEFT_UP: 'LEFT_UP', // Nhìn sang trái ngẩng đầu
+                    UP: 'UP', // Ngẩng đầu
+                    RIGHT_UP: 'RIGHT_UP', // Nhìn sang phải ngẩng đầu
+                    LEFT_DOWN: 'LEFT_DOWN', // Nhìn sang trái cúi đầu
+                    DOWN: 'DOWN', // Cuối đầu 
+                    RIGHT_DOWN: 'RIGHT_DOWN' // Nhìn sang phải cúi đầu
+                };
             spinner.ontransitionend = () => {
                 spinner.style.display = 'none';
             };
-
             function onResultsFaceMesh(results) {
                 document.body.classList.add('loaded');
                 fpsControl.tick();
@@ -214,26 +224,26 @@
                         const z = rvec.data64F[2] * 360;
 
                         if (y < -0.15) {
-                            angle = 'left';
+                            angle = ConstantAngle.LEFT;
                             if (x < -0.15) {
-                                angle += ' down';
+                                angle = ConstantAngle.LEFT_DOWN;
                             } else if (x > 0.15) {
-                                angle += ' up';
+                                angle = ConstantAngle.LEFT_UP;
                             }
                         } else if (y > 0.15) {
-                            angle = 'right';
+                            angle = ConstantAngle.RIGHT;
                             if (x < -0.15) {
-                                angle += ' down';
+                                angle = ConstantAngle.RIGHT_DOWN;
                             } else if (x > 0.15) {
-                                angle += ' up';
+                                angle = ConstantAngle.RIGHT_UP;
                             }
                         } else if (x > 0.15) {
-                            angle = 'up';
+                            angle = ConstantAngle.UP;
                         } else if (x < - 0.15) {
-                            angle = 'down';
+                            angle = ConstantAngle.DOWN;
                         }
                         else {
-                            angle = 'forward';
+                            angle = ConstantAngle.STRAIGHT;
                         }
 
                         const centerX = (xMin + xMax) / 2;
@@ -241,17 +251,53 @@
                          // Tăng giá trị của bán kính để nới rộng vòng tròn
                         const radius = Math.max(xMax - xMin, yMax - yMin) / 2 * 1.2; // Thay đổi giá trị 1.5 tùy theo mong muốn
 
-                        canvasCtx.beginPath();
-                        canvasCtx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-                        canvasCtx.strokeStyle = '#FF0000'; // Màu vòng tròn
-                        canvasCtx.lineWidth = 2;
-                        canvasCtx.stroke();
+                        // Vẽ các đoạn chấm tạo thành đường viền của vòng tròn
+                        const numSegments = 80; // Số lượng đoạn chấm
+                        let listDotFocus = [];
+                        if (angle === ConstantAngle.RIGHT) {
+                            listDotFocus = [76, 77, 78, 79, 0, 1, 2, 3, 4, 5];
+                        } else if (angle === ConstantAngle.RIGHT_DOWN) {
+                            listDotFocus = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+                        } else if (angle === ConstantAngle.DOWN) {
+                            listDotFocus = [16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
+                        } else if (angle === ConstantAngle.LEFT_DOWN) {
+                            listDotFocus = [26, 27, 28, 29, 30, 31, 32, 33, 34, 35];
+                        } else if (angle === ConstantAngle.LEFT) {
+                            listDotFocus = [36, 37, 38, 39, 40, 41, 42, 43, 44, 45];
+                        } else if (angle === ConstantAngle.LEFT_UP){
+                            listDotFocus = [46, 47, 48, 49, 50, 51, 52, 53, 54, 55];
+                        } else if (angle === ConstantAngle.UP) {
+                            listDotFocus = [56, 57, 58, 59, 60, 61, 62, 63, 64, 65];
+                        } else if (angle === ConstantAngle.RIGHT_UP) {
+                            listDotFocus = [66, 67, 68, 69, 70, 71, 72, 73, 74, 75];
+                        } else {
+                            listDotFocus = [];
+                        }
+                        const angleIncrement = (2 * Math.PI) / numSegments;
+
+                        for (let i = 0; i < numSegments; i++) {
+                            const angle = i * angleIncrement;
+
+                            const x = centerX + radius * Math.cos(angle);
+                            const y = centerY + radius * Math.sin(angle);
+
+                            let dotRadius = 1; // Đặt bán kính của chấm
+                            const itemFind = listDotFocus.find(s=> s === i);
+                            if (itemFind!== undefined) {
+                                dotRadius = 5;
+                            }
+
+                            canvasCtx.beginPath();
+                            canvasCtx.arc(x, y, dotRadius, 0, 2 * Math.PI);
+                            canvasCtx.fillStyle = '#00FF00';
+                            canvasCtx.fill();
+                        }
                     }
 
-                    // Draw text in the top-left corner
-                    canvasCtx.fillStyle = 'rgb(255, 0, 0)';
-                    canvasCtx.font = '18px Arial';
-                    canvasCtx.fillText(angle, 10, 25);
+                    // // Draw text in the top-left corner
+                    // canvasCtx.fillStyle = 'rgb(255, 0, 0)';
+                    // canvasCtx.font = '18px Arial';
+                    // canvasCtx.fillText(angle, 10, 25);
                     
                 }
                 canvasCtx.restore();
